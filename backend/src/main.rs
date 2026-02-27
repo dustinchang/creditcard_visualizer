@@ -37,7 +37,9 @@
 // }
 
 use axum::{Json, Router, extract::Path, response::Html, routing::get, routing::post};
+use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 use serde::Deserialize;
+use tempfile::NamedTempFile;
 use tower_livereload::LiveReloadLayer;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
@@ -53,6 +55,13 @@ struct User {
 struct CreateUserRequest {
     username: String,
     email: String,
+}
+
+#[derive(TryFromMultipart, ToSchema)]
+struct UploadFileRequest {
+    #[schema(value_type = String, format = Binary)] // Tells Swagger this is a file picker
+    file: FieldData<NamedTempFile>,
+    description: String,
 }
 
 #[utoipa::path(
@@ -87,10 +96,34 @@ async fn create_user(Json(payload): Json<CreateUserRequest>) -> &'static str {
     "User created"
 }
 
+#[utoipa::path(
+    post,
+    path = "/upload",
+    request_body(content_type = "multipart/form-data", content = UploadFileRequest),
+    responses((status = 200, description = "File uploaded"))
+)]
+async fn upload_file(
+    TypedMultipart(UploadFileRequest { file, description }): TypedMultipart<UploadFileRequest>,
+) -> String {
+    println!(
+        "Uploaded {} with description: {}",
+        file.metadata
+            .file_name
+            .as_deref()
+            .unwrap_or("Unknown file_name"),
+        description
+    );
+    format!(
+        "Uploaded {} with description: {}",
+        file.metadata.file_name.unwrap(),
+        description
+    )
+}
+
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_user, create_user),
-    components(schemas(User, CreateUserRequest))
+    paths(get_user, create_user, upload_file),
+    components(schemas(User, CreateUserRequest, UploadFileRequest))
 )]
 struct ApiDoc;
 
@@ -104,6 +137,7 @@ async fn main() {
         )
         .route("/user/{id}", get(get_user))
         .route("/user", post(create_user))
+        .route("/upload", post(upload_file))
         // Serve Swagger UI at /swagger-ui
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(LiveReloadLayer::new());
