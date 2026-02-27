@@ -36,15 +36,23 @@
 //     axum::serve(listener, app).await.unwrap();
 // }
 
-use axum::{Json, Router, extract::Path, response::Html, routing::get};
+use axum::{Json, Router, extract::Path, response::Html, routing::get, routing::post};
+use serde::Deserialize;
 use tower_livereload::LiveReloadLayer;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 
+// Types
 #[derive(ToSchema, serde::Serialize)]
 struct User {
     id: i32,
     username: String,
+}
+
+#[derive(ToSchema, Deserialize)]
+struct CreateUserRequest {
+    username: String,
+    email: String,
 }
 
 #[utoipa::path(
@@ -65,8 +73,25 @@ async fn get_user(Path(id): Path<i32>) -> Json<User> {
     })
 }
 
+#[utoipa::path(
+    post,
+    path = "/user", // No ID here because we are creating a NEW user
+    request_body = CreateUserRequest,
+    responses((status = 201, body = User))
+)]
+async fn create_user(Json(payload): Json<CreateUserRequest>) -> &'static str {
+    println!(
+        "Creating user: {}, with email: {}",
+        payload.username, payload.email
+    );
+    "User created"
+}
+
 #[derive(OpenApi)]
-#[openapi(paths(get_user), components(schemas(User)))]
+#[openapi(
+    paths(get_user, create_user),
+    components(schemas(User, CreateUserRequest))
+)]
 struct ApiDoc;
 
 #[tokio::main]
@@ -78,6 +103,7 @@ async fn main() {
             get(|| async { Html("<html><body><h1>Check Source test</h1></body></html>") }),
         )
         .route("/user/{id}", get(get_user))
+        .route("/user", post(create_user))
         // Serve Swagger UI at /swagger-ui
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(LiveReloadLayer::new());
