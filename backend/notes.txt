@@ -1,0 +1,29 @@
+// Add to notes
+In Rustas_ref``as_mut, and as_deref are methods used to transform references to containers (like Option<T> or Result<T, E>) into containers of references, allowing you to work with the inner value without taking ownership. 
+Here is the breakdown of the differences, primarily focusing on their behavior with Option<T>:
+1. as_ref()
+Purpose: Converts &Option<T> into Option<&T>.
+Behavior: It takes a reference to the container and returns a new container holding a shared reference to the inner data.
+Use Case: You want to borrow the value inside an Option without taking it out or cloning it.
+Example:
+rust
+let x: Option<String> = Some(String::from("hello"));
+let y: Option<&String> = x.as_ref(); // x is still valid
+ 
+2. as_mut()
+Purpose: Converts &mut Option<T> into Option<&mut T>.
+Behavior: Similar to as_ref, but for mutable references. It allows you to mutate the inner data while keeping the Option container.
+Use Case: You want to modify the value inside an Option via a mutable reference.
+Example:
+rust
+let mut x: Option<String> = Some(String::from("hello"));
+x.as_mut().map(|s| s.push_str(" world"));
+ 
+3. as_deref()
+Purpose: Converts &Option<T> into Option<&T::Target> (where T implements Deref).
+Behavior: Performs as_ref() and then automatically dereferences the inner pointer (* operator). It is essential for converting smart pointers (like Box<T>``Arc<T>, or String) into their underlying unsized types (like &T or &str).
+Use Case: You have an Option<String> and need an Option<&str>, or Option<Box<T>> and need Option<&T>.
+Example:
+rust
+let x: Option<String> = Some(String::from("hello"));
+let y: Option<&str> = x.as_deref(); // Converts Option<String> -> Option<&str>
