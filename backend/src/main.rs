@@ -1,48 +1,13 @@
-// use axum::http::Method;
-// use rspc::Router;
-// use std::net::SocketAddr;
-// use tower_http::cors::{Any, CorsLayer};
-
-// #[tokio::main]
-// async fn main() {
-//     // 1. Define the router and UNWRAP it (because build returns a Result)
-//     let (router, _) = Router::<()>::new()
-//         .query("version", |t| t.resolver(|_ctx, _: ()| "1.0.0"))
-//         .build()
-//         .expect("Failed to build rspc router");
-
-//     // 2. Export types
-//     router
-//         .export_ts("../frontend/src/bindings.ts")
-//         .expect("Failed to export typescript bindings");
-
-//     // 3. Setup CORS
-//     let cors = CorsLayer::new()
-//         .allow_methods([Method::GET, Method::POST])
-//         .allow_origin(Any)
-//         .allow_headers(Any);
-
-//     // 4. Create Axum app
-//     // Note: In 0.4.x, we use the router directly with the Axum integration
-//     let app = axum::Router::new()
-//         .nest("/rspc", rspc_axum::endpoint(router, |_: ()| ()))
-//         .layer(cors);
-
-//     // 5. Run the server
-//     let addr = SocketAddr::from(([127, 0, 0, 1], 4000));
-//     println!("Server running on http://{}", addr);
-
-//     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-//     axum::serve(listener, app).await.unwrap();
-// }
-
-use axum::{Json, Router, extract::Path, response::Html, routing::get, routing::post};
+use axum::{Json, Router, extract::Path, extract::State, response::Html, routing::get, routing::post};
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 use serde::Deserialize;
 use tempfile::NamedTempFile;
 use tower_livereload::LiveReloadLayer;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
+use ollama_rs::Ollama;
+use ollama_rs::generation::completion::request::GenerationRequest;
+use std::sync::Arc;
 
 // Types
 #[derive(ToSchema, serde::Serialize)]
@@ -120,15 +85,74 @@ async fn upload_file(
     )
 }
 
+// Generate code and types
+struct AppState {
+    ollama: Ollama,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct PromptRequest {
+    /// The instructions for the AI (e.g., "You are a poetic assistant")
+    system_instructions: String,
+    /// The actual data or prompt to process
+    user_data: String,
+}
+
+#[derive(serde::Serialize, ToSchema)]
+struct PromptResponse {
+    // The final generated text from model
+    response: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/generate",
+    request_body = PromptRequest,
+    responses(
+        (status = 200, description = "AI successfully generated a response", body = PromptResponse),
+        (status = 500, description = "Internal server error or Ollama unreachable")
+    ),
+    tag = "ai"
+)]
+async fn generate_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<PromptRequest>,
+) -> Json<PromptResponse> {
+    let model = "llama3.2:3b".to_string();
+    let req = GenerationRequest::new(model, payload.user_data).system(payload.system_instructions);
+
+    let res = state.ollama
+        .generate(req)
+        .await
+        .map_err(|e| {
+            println!("Ollama res Error: {}", e);
+        })
+        .unwrap();
+
+    Json(PromptResponse { response: res.response })
+}
+
+
+// TODO: Get data from an uploaded file
+// TODO: Parse only the needed(non-sensitive) data from a CC file
+// TODO: Return that data to frontend
+// TODO: Look for data visualization that will render that data useful
+// TODO: Or maybe use AI to categorize it if no useful metadata?
+// TODO: Add Typeshare at some point
+// Stripe token for users to pay
+//
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_user, create_user, upload_file),
-    components(schemas(User, CreateUserRequest, UploadFileRequest))
+    paths(get_user, create_user, upload_file, generate_handler),
+    components(schemas(User, CreateUserRequest, UploadFileRequest, PromptRequest, PromptResponse))
 )]
 struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
+    let ollama = Ollama::default();
+    let shared_state = Arc::new(AppState { ollama });
+
     let app = Router::new()
         // .route("/", get(|| async { "Hello, Rust!" }))
         .route(
@@ -138,6 +162,8 @@ async fn main() {
         .route("/user/{id}", get(get_user))
         .route("/user", post(create_user))
         .route("/upload", post(upload_file))
+        .route("/generate", post(generate_handler))
+        .with_state(shared_state)
         // Serve Swagger UI at /swagger-ui
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(LiveReloadLayer::new());

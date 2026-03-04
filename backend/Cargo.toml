@@ -19,3 +19,4 @@ utoipa-swagger-ui = { version = "9", features = ["axum"] }
 utoipa-axum = "0.2"
 axum_typed_multipart = "0.16.5"
 tempfile = "3.26.0"
+ollama-rs = "0.3.4"
