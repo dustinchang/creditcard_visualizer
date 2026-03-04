@@ -1,10 +1,12 @@
 use axum::{
-    Json, Router, extract::Path, extract::State, response::Html, routing::get, routing::post,
+    Json, Router, extract::Path, extract::State, http::StatusCode, response::Html, routing::get,
+    routing::post,
 };
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 use ollama_rs::Ollama;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use serde::Deserialize;
+use std::io::Read;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tower_livereload::LiveReloadLayer;
@@ -12,7 +14,10 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 
 mod constants;
-use constants::PROMPT_INSTRUCTIONS;
+use constants::{MODEL_NAME, PROMPT_INSTRUCTIONS};
+
+mod utils;
+use utils::{ErrorResponse, clean_json_response, handle_error};
 
 // Types
 #[derive(ToSchema, serde::Serialize)]
@@ -32,6 +37,15 @@ struct UploadFileRequest {
     #[schema(value_type = String, format = Binary)] // Tells Swagger this is a file picker
     file: FieldData<NamedTempFile>,
     description: String,
+}
+
+#[derive(serde::Serialize, ToSchema)]
+struct UploadFileResponse {
+    filename: String,
+    description: String,
+    /// The raw CSV content ready for AI processing
+    csv_content: String,
+    row_count: usize,
 }
 
 #[utoipa::path(
@@ -70,25 +84,135 @@ async fn create_user(Json(payload): Json<CreateUserRequest>) -> &'static str {
     post,
     path = "/upload",
     request_body(content_type = "multipart/form-data", content = UploadFileRequest),
-    responses((status = 200, description = "File uploaded"))
+    responses(
+        (status = 200, description = "File uploaded and parsed", body = UploadFileResponse),
+        (status = 500, description = "Failed to parse CSV")
+    )
 )]
 async fn upload_file(
     TypedMultipart(UploadFileRequest { file, description }): TypedMultipart<UploadFileRequest>,
-) -> String {
-    println!(
-        "Uploaded {} with description: {}",
-        file.metadata
-            .file_name
-            .as_deref()
-            .unwrap_or("Unknown file_name"),
-        description
-    );
-    format!(
-        "Uploaded {} with description: {}",
-        file.metadata.file_name.unwrap(),
-        description
-    )
+) -> Result<Json<UploadFileResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let filename = file
+        .metadata
+        .file_name
+        .clone()
+        .unwrap_or("unknown.csv".to_string());
+
+    // Read the file contents
+    let mut csv_content = String::new();
+    let mut temp_file = file.contents;
+    // Read the file contents into csv_content string
+    // - `temp_file` is a NamedTempFile (temporary file on disk)
+    // - `.read_to_string(&mut csv_content)` reads all bytes from the file,
+    //   decodes them as UTF-8, and appends the resulting string to csv_content
+    // - `.map_err()` transforms any IO error into our custom error response
+    // - `?` operator propagates the error if reading fails, otherwise continues
+    temp_file.read_to_string(&mut csv_content).map_err(|e| {
+        handle_error(
+            e,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "File read error",
+            "Failed to read the uploaded file contents",
+            "upload",
+        )
+    })?;
+
+    // Count rows (excluding header)
+    // Count the number of rows in the CSV file
+    // - `csv_content.lines()` splits the string into an iterator of lines
+    // - `.count()` counts all lines (including the header row)
+    // - `.saturating_sub(1)` subtracts 1 to exclude the header row from the count
+    //   (saturating_sub prevents underflow, returning 0 if the result would be negative)
+    let row_count = csv_content.lines().count().saturating_sub(1);
+
+    println!("Uploaded {} with {} rows", filename, row_count);
+
+    Ok(Json(UploadFileResponse {
+        filename,
+        description,
+        csv_content,
+        row_count,
+    }))
 }
+
+#[derive(serde::Serialize, ToSchema)]
+struct AnalyzeTransactionsResponse {
+    /// The AI's categorized and analyzed response in JSON format
+    /// Contains: categories (with transactions and totals per category) and grand_total
+    analysis: String,
+    /// Number of transactions processed
+    transaction_count: usize,
+}
+
+#[utoipa::path(
+    post,
+    path = "/analyze-transactions",
+    request_body(content_type = "multipart/form-data", content = UploadFileRequest),
+    responses(
+        (status = 200, description = "Transactions analyzed by AI", body = AnalyzeTransactionsResponse),
+        (status = 500, description = "Failed to parse CSV or generate AI response")
+    ),
+    tag = "ai"
+)]
+async fn analyze_transactions(
+    State(state): State<Arc<AppState>>,
+    TypedMultipart(UploadFileRequest {
+        file,
+        description: _,
+    }): TypedMultipart<UploadFileRequest>,
+) -> Result<Json<AnalyzeTransactionsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Read the file contents
+    let mut csv_content = String::new();
+    let mut temp_file = file.contents;
+    temp_file.read_to_string(&mut csv_content).map_err(|e| {
+        handle_error(
+            e,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "File read error",
+            "Failed to read file contents",
+            "analyze-transactions",
+        )
+    })?;
+
+    let row_count = csv_content.lines().count().saturating_sub(1);
+
+    // Generate AI analysis - send CSV directly to AI
+    let req = GenerationRequest::new(MODEL_NAME.to_string(), csv_content)
+        .system(PROMPT_INSTRUCTIONS.to_string());
+
+    let res = state.ollama.generate(req).await.map_err(|e| {
+        handle_error(
+            e,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Ollama service unavailable",
+            "Failed to connect to Ollama. Please ensure Ollama is running (try 'ollama serve')",
+            "analyze-transactions",
+        )
+    })?;
+
+    // Clean the JSON response to remove any markdown formatting
+    let cleaned_json = clean_json_response(&res.response);
+
+    // Validate that it's actually valid JSON
+    if let Err(e) = serde_json::from_str::<serde_json::Value>(&cleaned_json) {
+        eprintln!("AI returned invalid JSON: {}", e);
+        eprintln!("Raw response: {}", res.response);
+        return Err(handle_error(
+            format!("Invalid JSON from AI: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "AI response error",
+            "The AI returned invalid JSON. Please try again",
+            "analyze-transactions",
+        ));
+    }
+
+    Ok(Json(AnalyzeTransactionsResponse {
+        analysis: cleaned_json,
+        transaction_count: row_count,
+    }))
+}
+
+// CSV helper functions removed - sending CSV directly to AI
 
 // Generate code and types
 struct AppState {
@@ -122,29 +246,29 @@ struct PromptResponse {
 async fn generate_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<PromptRequest>,
-) -> Json<PromptResponse> {
-    let model = "llama3.2:3b".to_string();
-
+) -> Result<Json<PromptResponse>, (StatusCode, Json<ErrorResponse>)> {
     let system_instructions = if payload.system_instructions.trim().is_empty() {
         PROMPT_INSTRUCTIONS.to_string()
     } else {
         payload.system_instructions
     };
 
-    let req = GenerationRequest::new(model, payload.user_data).system(system_instructions);
+    let req = GenerationRequest::new(MODEL_NAME.to_string(), payload.user_data)
+        .system(system_instructions);
 
-    let res = state
-        .ollama
-        .generate(req)
-        .await
-        .map_err(|e| {
-            println!("Ollama res Error: {}", e);
-        })
-        .unwrap();
+    let res = state.ollama.generate(req).await.map_err(|e| {
+        handle_error(
+            e,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Ollama service unavailable",
+            "Failed to connect to Ollama. Please ensure Ollama is running (try 'ollama serve')",
+            "generate",
+        )
+    })?;
 
-    Json(PromptResponse {
+    Ok(Json(PromptResponse {
         response: res.response,
-    })
+    }))
 }
 
 // TODO: Get data from an uploaded file
@@ -157,13 +281,22 @@ async fn generate_handler(
 //
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_user, create_user, upload_file, generate_handler),
+    paths(
+        get_user,
+        create_user,
+        upload_file,
+        generate_handler,
+        analyze_transactions
+    ),
     components(schemas(
         User,
         CreateUserRequest,
         UploadFileRequest,
+        UploadFileResponse,
         PromptRequest,
-        PromptResponse
+        PromptResponse,
+        AnalyzeTransactionsResponse,
+        ErrorResponse
     ))
 )]
 struct ApiDoc;
@@ -183,6 +316,7 @@ async fn main() {
         .route("/user", post(create_user))
         .route("/upload", post(upload_file))
         .route("/generate", post(generate_handler))
+        .route("/analyze-transactions", post(analyze_transactions))
         .with_state(shared_state)
         // Serve Swagger UI at /swagger-ui
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
