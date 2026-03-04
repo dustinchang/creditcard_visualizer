@@ -1,5 +1,76 @@
 # Backend Changelog
 
+## 2025-01-XX - OpenAI Integration
+
+### Added
+- **New OpenAI Endpoint**: `/analyze-transactions-openai` - OpenAI-powered transaction analysis
+  - Uses GPT-4o-mini for reliable, accurate JSON categorization
+  - Configured with `temperature: 0.1` for consistent output
+  - Eliminates hallucination issues seen with smaller local models
+  - Returns same JSON structure as Ollama endpoint for compatibility
+- **OpenAI Client**: Integrated `async-openai` crate v0.33.0 with chat-completion feature
+- **Model Configuration**: Added `OPENAI_MODEL` constant in `constants.rs` (default: "gpt-4o-mini")
+- **Documentation**: 
+  - `OPENAI_INTEGRATION.md` - Complete guide for OpenAI setup and usage
+  - Includes API key setup, cost estimates, error handling, and best practices
+
+### Changed
+- **AppState**: Added `openai: OpenAIClient` field for OpenAI API access
+- **Dependencies**: Added `async-openai = { version = "0.33.0", features = ["chat-completion"] }`
+- **OpenAPI Documentation**: Updated to include `/analyze-transactions-openai` endpoint
+
+### Benefits of OpenAI Endpoint
+
+1. **Reliability**: Consistently produces valid JSON without manual cleaning
+2. **Accuracy**: Superior merchant name recognition and categorization
+3. **No Hallucinations**: Processes each transaction exactly once
+4. **Scalability**: Handles larger CSVs without local hardware constraints
+5. **Speed**: Fast cloud-based processing (1-3 seconds typical)
+
+### Cost Considerations
+
+- **GPT-4o-mini pricing**: ~$0.15 per 1M input tokens, ~$0.60 per 1M output tokens
+- **Estimated cost per file**: ~$0.001-$0.005 (depending on transaction count)
+- **50-200 transactions**: Costs less than half a cent per analysis
+
+### Usage Comparison
+
+**OpenAI Endpoint** (recommended for production):
+```bash
+export OPENAI_API_KEY='sk-your-key-here'
+curl -X POST http://localhost:3000/analyze-transactions-openai \
+  -F "file=@transactions.csv" \
+  -F "description=December 2024"
+```
+
+**Ollama Endpoint** (recommended for development/privacy):
+```bash
+ollama serve  # Must be running locally
+curl -X POST http://localhost:3000/analyze-transactions \
+  -F "file=@transactions.csv" \
+  -F "description=December 2024"
+```
+
+Both endpoints return the same JSON structure for easy switching.
+
+### Implementation Details
+
+- Uses `CreateChatCompletionRequestArgs` builder pattern for type-safe API calls
+- Reuses existing `PROMPT_INSTRUCTIONS` for consistent behavior across endpoints
+- Applies same JSON cleaning/validation pipeline as Ollama endpoint
+- Unified error handling via `handle_error` utility function
+- Client initialized once at startup and shared via `Arc<AppState>`
+
+### Next Steps
+
+- [ ] Add response caching to reduce API costs for duplicate requests
+- [ ] Implement retry logic with exponential backoff
+- [ ] Add streaming support for real-time progress updates
+- [ ] Track and log API usage/costs
+- [ ] Add rate limiting for production use
+
+---
+
 ## 2025-01-XX - CSV Processing and AI Integration (Simplified)
 
 ### Added

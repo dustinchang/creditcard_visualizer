@@ -2,6 +2,10 @@
 // pub const MODEL_NAME: &str = "llama3.2:latest"; // Use larger model to avoid hallucinations
 pub const MODEL_NAME: &str = "mistral:latest"; // Use larger model to avoid hallucinations
 
+// OpenAI Model Configuration
+// gpt-4o-mini
+pub const OPENAI_MODEL: &str = "gpt-5-mini"; // Fast and cost-effective for JSON generation
+
 pub const PROMPT_INSTRUCTIONS: &str = r#"You are a financial analyst. Analyze the credit card transaction CSV data I'm providing.
 
 CRITICAL RULES:

@@ -1,3 +1,10 @@
+use async_openai::{
+    Client as OpenAIClient,
+    types::chat::{
+        ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+        CreateChatCompletionRequestArgs,
+    },
+};
 use axum::{
     Json, Router, extract::Path, extract::State, http::StatusCode, response::Html, routing::get,
     routing::post,
@@ -14,7 +21,7 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 
 mod constants;
-use constants::{MODEL_NAME, PROMPT_INSTRUCTIONS};
+use constants::{MODEL_NAME, OPENAI_MODEL, PROMPT_INSTRUCTIONS};
 
 mod utils;
 use utils::{ErrorResponse, clean_json_response, handle_error};
@@ -212,11 +219,135 @@ async fn analyze_transactions(
     }))
 }
 
-// CSV helper functions removed - sending CSV directly to AI
+#[utoipa::path(
+    post,
+    path = "/analyze-transactions-openai",
+    request_body(content_type = "multipart/form-data", content = UploadFileRequest),
+    responses(
+        (status = 200, description = "Transactions analyzed by OpenAI", body = AnalyzeTransactionsResponse),
+        (status = 500, description = "Failed to parse CSV or generate AI response"),
+        (status = 503, description = "OpenAI API unavailable")
+    ),
+    tag = "ai"
+)]
+async fn analyze_transactions_openai(
+    State(state): State<Arc<AppState>>,
+    TypedMultipart(UploadFileRequest {
+        file,
+        description: _,
+    }): TypedMultipart<UploadFileRequest>,
+) -> Result<Json<AnalyzeTransactionsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Read the file contents
+    let mut csv_content = String::new();
+    let mut temp_file = file.contents;
+    temp_file.read_to_string(&mut csv_content).map_err(|e| {
+        handle_error(
+            e,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "File read error",
+            "Failed to read file contents",
+            "analyze-transactions-openai",
+        )
+    })?;
+
+    let row_count = csv_content.lines().count().saturating_sub(1);
+
+    // Create OpenAI chat completion request with structured output
+    // Helper for System Messages
+    let system_msg = ChatCompletionRequestSystemMessageArgs::default()
+        .content(PROMPT_INSTRUCTIONS)
+        .build()
+        .map_err(|e| {
+            handle_error(
+                e,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Build error",
+                "System prompt failed",
+                "openai",
+            )
+        })?;
+
+    // Helper for User Messages (CSV)
+    let user_msg = ChatCompletionRequestUserMessageArgs::default()
+        .content(csv_content)
+        .build()
+        .map_err(|e| {
+            handle_error(
+                e,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Build error",
+                "CSV input failed",
+                "openai",
+            )
+        })?;
+
+    // OAI Request
+    let request = CreateChatCompletionRequestArgs::default()
+        .model(OPENAI_MODEL)
+        .messages(vec![system_msg.into(), user_msg.into()])
+        .build()
+        .map_err(|e| {
+            handle_error(
+                e,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Build error",
+                "OpenAI request failed",
+                "openai",
+            )
+        })?;
+
+    // Call OpenAI API
+    let response = state.openai.chat().create(request).await.map_err(|e| {
+            handle_error(
+                e,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "OpenAI API error",
+                "Failed to connect to OpenAI API. Please check your OPENAI_API_KEY environment variable",
+                "analyze-transactions-openai",
+            )
+        })?;
+
+    // Extract the response content
+    let ai_response = response
+        .choices
+        .first()
+        .and_then(|choice| choice.message.content.clone())
+        .ok_or_else(|| {
+            handle_error(
+                "No response from OpenAI",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "OpenAI response error",
+                "OpenAI returned an empty response",
+                "analyze-transactions-openai",
+            )
+        })?;
+
+    // Clean the JSON response to remove any markdown formatting
+    let cleaned_json = clean_json_response(&ai_response);
+
+    // Validate that it's actually valid JSON
+    if let Err(e) = serde_json::from_str::<serde_json::Value>(&cleaned_json) {
+        eprintln!("OpenAI returned invalid JSON: {}", e);
+        eprintln!("Raw response: {}", ai_response);
+        return Err(handle_error(
+            format!("Invalid JSON from OpenAI: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "AI response error",
+            "OpenAI returned invalid JSON. Please try again",
+            "analyze-transactions-openai",
+        ));
+    }
+
+    Ok(Json(AnalyzeTransactionsResponse {
+        analysis: cleaned_json,
+        transaction_count: row_count,
+    }))
+}
 
 // Generate code and types
 struct AppState {
     ollama: Ollama,
+    openai: OpenAIClient<async_openai::config::OpenAIConfig>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -286,7 +417,8 @@ async fn generate_handler(
         create_user,
         upload_file,
         generate_handler,
-        analyze_transactions
+        analyze_transactions,
+        analyze_transactions_openai
     ),
     components(schemas(
         User,
@@ -297,14 +429,18 @@ async fn generate_handler(
         PromptResponse,
         AnalyzeTransactionsResponse,
         ErrorResponse
-    ))
+    )),
+    tags(
+        (name = "ai", description = "AI-powered transaction analysis endpoints")
+    )
 )]
 struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
     let ollama = Ollama::default();
-    let shared_state = Arc::new(AppState { ollama });
+    let openai = OpenAIClient::new();
+    let shared_state = Arc::new(AppState { ollama, openai });
 
     let app = Router::new()
         // .route("/", get(|| async { "Hello, Rust!" }))
@@ -317,6 +453,10 @@ async fn main() {
         .route("/upload", post(upload_file))
         .route("/generate", post(generate_handler))
         .route("/analyze-transactions", post(analyze_transactions))
+        .route(
+            "/analyze-transactions-openai",
+            post(analyze_transactions_openai),
+        )
         .with_state(shared_state)
         // Serve Swagger UI at /swagger-ui
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
