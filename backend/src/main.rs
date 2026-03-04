@@ -1,13 +1,18 @@
-use axum::{Json, Router, extract::Path, extract::State, response::Html, routing::get, routing::post};
+use axum::{
+    Json, Router, extract::Path, extract::State, response::Html, routing::get, routing::post,
+};
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
+use ollama_rs::Ollama;
+use ollama_rs::generation::completion::request::GenerationRequest;
 use serde::Deserialize;
+use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tower_livereload::LiveReloadLayer;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
-use ollama_rs::Ollama;
-use ollama_rs::generation::completion::request::GenerationRequest;
-use std::sync::Arc;
+
+mod constants;
+use constants::PROMPT_INSTRUCTIONS;
 
 // Types
 #[derive(ToSchema, serde::Serialize)]
@@ -119,9 +124,17 @@ async fn generate_handler(
     Json(payload): Json<PromptRequest>,
 ) -> Json<PromptResponse> {
     let model = "llama3.2:3b".to_string();
-    let req = GenerationRequest::new(model, payload.user_data).system(payload.system_instructions);
 
-    let res = state.ollama
+    let system_instructions = if payload.system_instructions.trim().is_empty() {
+        PROMPT_INSTRUCTIONS.to_string()
+    } else {
+        payload.system_instructions
+    };
+
+    let req = GenerationRequest::new(model, payload.user_data).system(system_instructions);
+
+    let res = state
+        .ollama
         .generate(req)
         .await
         .map_err(|e| {
@@ -129,9 +142,10 @@ async fn generate_handler(
         })
         .unwrap();
 
-    Json(PromptResponse { response: res.response })
+    Json(PromptResponse {
+        response: res.response,
+    })
 }
-
 
 // TODO: Get data from an uploaded file
 // TODO: Parse only the needed(non-sensitive) data from a CC file
@@ -144,7 +158,13 @@ async fn generate_handler(
 #[derive(OpenApi)]
 #[openapi(
     paths(get_user, create_user, upload_file, generate_handler),
-    components(schemas(User, CreateUserRequest, UploadFileRequest, PromptRequest, PromptResponse))
+    components(schemas(
+        User,
+        CreateUserRequest,
+        UploadFileRequest,
+        PromptRequest,
+        PromptResponse
+    ))
 )]
 struct ApiDoc;
 
