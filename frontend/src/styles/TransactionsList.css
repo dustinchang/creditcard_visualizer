@@ -1,0 +1,408 @@
+@import "./shared.css";
+
+.transactions-list-container {
+    width: 100%;
+    margin-top: 2rem;
+}
+
+.transactions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.transactions-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.transactions-title h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+}
+
+.transactions-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.categories-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.category-section {
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.category-section.expanded {
+    border-color: #6366f1;
+}
+
+.category-toggle {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s ease;
+    gap: 1rem;
+}
+
+.category-toggle:hover {
+    background-color: #f9fafb;
+}
+
+.category-section.expanded .category-toggle {
+    background-color: #f0f1ff;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.category-toggle-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.chevron-icon {
+    color: #6b7280;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.category-section.expanded .chevron-icon {
+    transform: rotate(90deg);
+    color: #6366f1;
+}
+
+.category-toggle-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
+}
+
+.category-transaction-count {
+    font-size: 0.875rem;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.category-toggle-amount {
+    font-weight: 700;
+    color: #1f2937;
+    font-size: 1.125rem;
+}
+
+.transactions-table-wrapper {
+    padding: 1rem;
+    background-color: #fafbfc;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.transactions-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.transactions-table thead {
+    background-color: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.transactions-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.transactions-table th.amount-column {
+    text-align: right;
+}
+
+.transactions-table tbody tr {
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+}
+
+.transactions-table tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+.transactions-table td {
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+}
+
+.date-cell {
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.merchant-cell {
+    color: #1f2937;
+    font-weight: 500;
+}
+
+.amount-cell {
+    color: #1f2937;
+    font-weight: 600;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.transactions-table tfoot {
+    background-color: #f9fafb;
+    border-top: 2px solid #e5e7eb;
+}
+
+.total-row td {
+    padding: 0.875rem 1rem;
+    font-weight: 600;
+}
+
+.total-label {
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.total-amount {
+    color: #6366f1;
+    font-size: 1rem;
+    text-align: right;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .transactions-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .transactions-title {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .transactions-actions {
+        width: 100%;
+    }
+
+    .transactions-actions .btn {
+        flex: 1;
+    }
+
+    .category-toggle {
+        padding: 0.875rem 1rem;
+    }
+
+    .category-toggle-left {
+        flex-wrap: wrap;
+    }
+
+    .category-toggle-name {
+        flex-basis: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .transactions-table-wrapper {
+        padding: 0.5rem;
+    }
+
+    .transactions-table thead {
+        display: none;
+    }
+
+    .transactions-table tbody,
+    .transactions-table tr {
+        display: block;
+    }
+
+    .transactions-table tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 0.75rem;
+        background-color: #ffffff;
+    }
+
+    .transactions-table td {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        padding: 0.375rem 0;
+        border: none;
+    }
+
+    .transactions-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #6b7280;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .date-cell::before {
+        content: "Date";
+    }
+
+    .merchant-cell::before {
+        content: "Merchant";
+    }
+
+    .amount-cell::before {
+        content: "Amount";
+    }
+
+    .merchant-cell {
+        word-break: break-word;
+    }
+
+    .transactions-table tfoot tr {
+        margin-bottom: 0;
+        border: none;
+        border-radius: 0;
+    }
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+    .transactions-title h3 {
+        color: #f9fafb;
+    }
+
+    .category-section.expanded {
+        border-color: #818cf8;
+    }
+
+    .category-toggle:hover {
+        background-color: #374151;
+    }
+
+    .category-section.expanded .category-toggle {
+        background-color: #312e81;
+        border-bottom-color: #4b5563;
+    }
+
+    .chevron-icon {
+        color: #d1d5db;
+    }
+
+    .category-section.expanded .chevron-icon {
+        color: #818cf8;
+    }
+
+    .category-toggle-name,
+    .category-toggle-amount {
+        color: #f9fafb;
+    }
+
+    .category-transaction-count {
+        color: #d1d5db;
+    }
+
+    .transactions-table-wrapper {
+        background-color: #111827;
+    }
+
+    .transactions-table {
+        background-color: #1f2937;
+    }
+
+    .transactions-table thead {
+        background-color: #111827;
+        border-bottom-color: #4b5563;
+    }
+
+    .transactions-table th {
+        color: #d1d5db;
+    }
+
+    .transactions-table tbody tr {
+        border-bottom-color: #374151;
+    }
+
+    .transactions-table tbody tr:hover {
+        background-color: #374151;
+    }
+
+    .date-cell {
+        color: #d1d5db;
+    }
+
+    .merchant-cell,
+    .amount-cell {
+        color: #f9fafb;
+    }
+
+    .transactions-table tfoot {
+        background-color: #111827;
+        border-top-color: #4b5563;
+    }
+
+    .total-label {
+        color: #d1d5db;
+    }
+
+    .total-amount {
+        color: #818cf8;
+    }
+
+    @media (max-width: 640px) {
+        .transactions-table tr {
+            background-color: #1f2937;
+            border-color: #4b5563;
+        }
+
+        .transactions-table td::before {
+            color: #d1d5db;
+        }
+    }
+}
+
+/* Print */
+@media print {
+    .transactions-actions {
+        display: none;
+    }
+
+    .category-section {
+        page-break-inside: avoid;
+    }
+
+    .transactions-table-wrapper {
+        display: block !important;
+    }
+}
