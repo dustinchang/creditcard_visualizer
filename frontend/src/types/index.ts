@@ -13,8 +13,14 @@ export interface CategoryAnalysis {
   [category: string]: Category;
 }
 
+export interface Refunds {
+  transactions: Transaction[];
+  total: number;
+}
+
 export interface AnalysisData {
   categories: CategoryAnalysis;
+  refunds?: Refunds;
   grand_total: number;
 }
 
@@ -28,7 +34,7 @@ export interface UploadedFile {
   name: string;
   size: number;
   uploadedAt: Date;
-  status: 'uploading' | 'success' | 'error';
+  status: "uploading" | "success" | "error";
   analysisData?: AnalysisData;
 }
 

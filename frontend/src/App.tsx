@@ -1,75 +1,109 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { FileUpload } from "./components/FileUpload";
 import { FileList } from "./components/FileList";
 import { DataVisualization } from "./components/DataVisualization";
 import { TransactionsList } from "./components/TransactionsList";
+import { Refunds } from "./components/Refunds";
 import type { UploadedFile, AnalysisData, ApiResponse } from "./types";
+import {
+  getAnalyzeEndpoint,
+  formatErrorMessage,
+  API_CONFIG,
+} from "./config/api";
 import "./App.css";
 
 function App() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<
+    "checking" | "online" | "offline"
+  >("checking");
 
-  // Mock upload function - replace with actual API call to Rust backend
-  const uploadFile = async (file: File): Promise<ApiResponse> => {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Log file name for debugging (remove in production)
-    console.log("Uploading file:", file.name);
-
-    // Mock response - in production, this would come from your Rust backend
-    const mockResponse: ApiResponse = {
-      analysis: JSON.stringify({
-        categories: {
-          Gas: {
-            transactions: [
-              {
-                date: "2025-12-30",
-                merchant: "PETRO-CANADA 91888",
-                amount: 64.04,
-              },
-            ],
-            total: 64.04,
-          },
-          Restaurants: {
-            transactions: [
-              {
-                date: "2025-12-04",
-                merchant: "UBER CANADA/UBEREATS",
-                amount: 53.4,
-              },
-              {
-                date: "2025-12-07",
-                merchant: "BROWNS SOCIALHOUSE BRENTW",
-                amount: 124.2,
-              },
-            ],
-            total: 177.6,
-          },
-          Groceries: {
-            transactions: [
-              {
-                date: "2025-12-06",
-                merchant: "WHOLE FOODS MARKET",
-                amount: 14.67,
-              },
-              {
-                date: "2025-12-09",
-                merchant: "SAVE ON FOODS #996",
-                amount: 44.78,
-              },
-            ],
-            total: 59.45,
-          },
-        },
-        grand_total: 301.09,
-      }),
-      transaction_count: 5,
+  // Check backend connection on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const response = await fetch(API_CONFIG.baseURL, { method: "GET" });
+        if (response.ok) {
+          setBackendStatus("online");
+          console.log("✅ Backend connection: OK");
+        } else {
+          setBackendStatus("offline");
+          console.error(
+            "❌ Backend connection: Failed (status " + response.status + ")",
+          );
+        }
+      } catch (error) {
+        setBackendStatus("offline");
+        console.error(
+          "❌ Backend connection: Cannot reach " + API_CONFIG.baseURL,
+        );
+        console.error(
+          "   Make sure backend is running: cd backend && cargo run",
+        );
+      }
     };
+    checkBackend();
+  }, []);
 
-    return mockResponse;
+  // Real API call to Rust backend with OpenAI
+  const uploadFile = async (file: File): Promise<ApiResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("description", "Credit card transaction analysis");
+
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout);
+
+    try {
+      const response = await fetch(getAnalyzeEndpoint(), {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.details ||
+            errorData?.message ||
+            `Server error: ${response.statusText}`,
+        );
+      }
+
+      const data: ApiResponse = await response.json();
+
+      // Validate the response has the expected structure
+      if (!data.analysis || typeof data.analysis !== "string") {
+        throw new Error("Invalid response format from server");
+      }
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      // Handle timeout
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(
+          "Request timed out. The AI analysis is taking longer than expected. Please try again.",
+        );
+      }
+
+      // Handle network errors
+      if (error instanceof TypeError) {
+        throw new Error(
+          "Network error. Please check that the backend server is running on " +
+            API_CONFIG.baseURL,
+        );
+      }
+
+      console.error("Upload error:", error);
+      throw error;
+    }
   };
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -88,10 +122,30 @@ function App() {
     setSelectedFileId(fileId);
     setIsUploading(true);
 
+    console.log(`📤 [1/3] Starting upload for: ${file.name}`);
+    console.log(`📊 File size: ${(file.size / 1024).toFixed(2)} KB`);
+    console.log(`🤖 Sending to OpenAI for AI analysis...`);
+    console.log(`⏱️  This typically takes 1-5 minutes depending on file size`);
+    console.log(`🔗 Endpoint: ${getAnalyzeEndpoint()}`);
+
+    const startTime = Date.now();
+
     try {
+      console.log(`⏳ [2/3] Uploading and waiting for OpenAI response...`);
+
       // Upload file and get analysis
       const response = await uploadFile(file);
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`✅ [3/3] Received response from backend in ${elapsed}s`);
+      console.log(`📦 Response data:`, response);
+
       const analysisData: AnalysisData = JSON.parse(response.analysis);
+      console.log(`✅ Successfully parsed analysis data`);
+      console.log(
+        `📊 Categories found: ${Object.keys(analysisData.categories).length}`,
+      );
+      console.log(`💰 Grand total: $${analysisData.grand_total.toFixed(2)}`);
 
       // Update file with success status and analysis data
       setFiles((prev) =>
@@ -99,8 +153,36 @@ function App() {
           f.id === fileId ? { ...f, status: "success", analysisData } : f,
         ),
       );
+
+      console.log(`🎉 File processed successfully!`);
     } catch (error) {
-      console.error("Upload failed:", error);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`❌ Upload failed after ${elapsed}s:`, error);
+
+      // Show formatted error message to user
+      const errorMessage = formatErrorMessage(error);
+
+      // Add more context to the error message
+      let detailedMessage = `Failed to analyze file: ${errorMessage}\n\n`;
+
+      if (errorMessage.includes("timeout")) {
+        detailedMessage += "Tips:\n";
+        detailedMessage +=
+          "• OpenAI is taking longer than expected (>5 minutes)\n";
+        detailedMessage += "• Try with a smaller CSV file\n";
+        detailedMessage += "• Check your internet connection\n";
+        detailedMessage += "• Make sure your OPENAI_API_KEY is valid";
+      } else if (errorMessage.includes("Network error")) {
+        detailedMessage += "Tips:\n";
+        detailedMessage += "• Make sure backend is running: cargo run\n";
+        detailedMessage += "• Check backend is on http://localhost:3000\n";
+        detailedMessage += "• Look at backend terminal for errors";
+      } else {
+        detailedMessage +=
+          "Check the browser console and backend logs for more details.";
+      }
+
+      alert(detailedMessage);
 
       // Update file with error status
       setFiles((prev) =>
@@ -134,6 +216,42 @@ function App() {
           <div className="header-title">
             <h1>💳 Credit Card Visualizer</h1>
             <p>Analyze your spending patterns with beautiful visualizations</p>
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              top: "1rem",
+              right: "1rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "0.875rem",
+              opacity: 0.9,
+            }}
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor:
+                  backendStatus === "online"
+                    ? "#10b981"
+                    : backendStatus === "offline"
+                      ? "#ef4444"
+                      : "#f59e0b",
+                display: "inline-block",
+                boxShadow:
+                  backendStatus === "online" ? "0 0 8px #10b981" : "none",
+              }}
+            ></span>
+            <span>
+              {backendStatus === "online"
+                ? "Backend Connected"
+                : backendStatus === "offline"
+                  ? "Backend Offline"
+                  : "Checking..."}
+            </span>
           </div>
         </div>
       </header>
@@ -172,6 +290,13 @@ function App() {
                   fileName={selectedFile?.name}
                 />
               </section>
+
+              {/* Refunds Section */}
+              {selectedFile?.analysisData?.refunds && (
+                <section className="section">
+                  <Refunds refundsData={selectedFile.analysisData.refunds} />
+                </section>
+              )}
 
               {/* Transactions List Section */}
               <section className="section">

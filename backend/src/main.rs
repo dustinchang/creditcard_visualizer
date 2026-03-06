@@ -16,6 +16,7 @@ use serde::Deserialize;
 use std::io::Read;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
+use tower_http::cors::{Any, CorsLayer};
 use tower_livereload::LiveReloadLayer;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
@@ -442,6 +443,12 @@ async fn main() {
     let openai = OpenAIClient::new();
     let shared_state = Arc::new(AppState { ollama, openai });
 
+    // Configure CORS to allow requests from frontend
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         // .route("/", get(|| async { "Hello, Rust!" }))
         .route(
@@ -460,6 +467,7 @@ async fn main() {
         .with_state(shared_state)
         // Serve Swagger UI at /swagger-ui
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .layer(cors)
         .layer(LiveReloadLayer::new());
 
     println!("Running on http://localhost:3000");

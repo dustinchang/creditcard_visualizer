@@ -133,7 +133,9 @@ export const FileList: React.FC<FileListProps> = ({
 
             <div className="file-status">
               {file.status === "uploading" && (
-                <span className="badge badge-primary">Uploading...</span>
+                <span className="badge badge-primary">
+                  Analyzing with AI... (may take 2-3 min)
+                </span>
               )}
               {file.status === "success" && (
                 <span className="badge badge-success">Ready</span>

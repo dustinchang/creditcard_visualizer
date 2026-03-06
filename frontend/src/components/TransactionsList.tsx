@@ -6,6 +6,10 @@ interface TransactionsListProps {
   analysisData: AnalysisData | null;
 }
 
+const COLORS = {
+  refund: "#10b981", // Green for refunds
+};
+
 export const TransactionsList: React.FC<TransactionsListProps> = ({
   analysisData,
 }) => {
@@ -27,7 +31,15 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
 
   const expandAll = () => {
     if (analysisData) {
-      setExpandedCategories(new Set(Object.keys(analysisData.categories)));
+      const allCategories = new Set(Object.keys(analysisData.categories));
+      // Also add Refunds if it exists
+      if (
+        analysisData.refunds &&
+        analysisData.refunds.transactions.length > 0
+      ) {
+        allCategories.add("Refunds");
+      }
+      setExpandedCategories(allCategories);
     }
   };
 
@@ -95,7 +107,13 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
     0,
   );
 
-  const allExpanded = expandedCategories.size === categories.length;
+  // Check if all categories AND refunds (if exists) are expanded
+  const totalExpandable =
+    categories.length +
+    (analysisData.refunds && analysisData.refunds.transactions.length > 0
+      ? 1
+      : 0);
+  const allExpanded = expandedCategories.size === totalExpandable;
 
   return (
     <div className="transactions-list-container">
@@ -116,6 +134,123 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
           )}
         </div>
       </div>
+
+      {/* Refunds Section */}
+      {analysisData.refunds && analysisData.refunds.transactions.length > 0 && (
+        <div className="refunds-section">
+          <div
+            className={`card category-section ${expandedCategories.has("Refunds") ? "expanded" : ""}`}
+            style={{ borderColor: COLORS.refund }}
+          >
+            <button
+              className="category-toggle"
+              onClick={() => toggleCategory("Refunds")}
+              aria-expanded={expandedCategories.has("Refunds")}
+              aria-controls="transactions-Refunds"
+            >
+              <div className="category-toggle-left">
+                <svg
+                  className="chevron-icon"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+                <span className="category-toggle-name">💰 Refunds</span>
+                <span className="category-transaction-count">
+                  {analysisData.refunds.transactions.length}{" "}
+                  {analysisData.refunds.transactions.length === 1
+                    ? "refund"
+                    : "refunds"}
+                </span>
+              </div>
+              <span
+                className="category-toggle-amount"
+                style={{ color: COLORS.refund }}
+              >
+                {formatCurrency(analysisData.refunds.total)}
+              </span>
+            </button>
+
+            {expandedCategories.has("Refunds") && (
+              <div
+                id="transactions-Refunds"
+                className="transactions-table-wrapper"
+              >
+                <table className="transactions-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Merchant</th>
+                      <th className="amount-column">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysisData.refunds.transactions
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime(),
+                      )
+                      .map((transaction, index) => (
+                        <tr key={index} className="transaction-row">
+                          <td className="date-cell">
+                            {formatDate(transaction.date)}
+                          </td>
+                          <td className="merchant-cell">
+                            {transaction.merchant}
+                          </td>
+                          <td
+                            className="amount-cell"
+                            style={{ color: COLORS.refund }}
+                          >
+                            {formatCurrency(transaction.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="total-row">
+                      <td colSpan={2} className="total-label">
+                        Total Refunds
+                      </td>
+                      <td
+                        className="total-amount"
+                        style={{ color: COLORS.refund }}
+                      >
+                        {formatCurrency(analysisData.refunds.total)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+                <div className="refunds-note" style={{ marginTop: "0.75rem" }}>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <span>Refunds are not included in spending totals</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="categories-list">
         {categories.map(([categoryName, category]) => {
