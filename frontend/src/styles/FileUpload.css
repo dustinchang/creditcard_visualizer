@@ -1,0 +1,137 @@
+@import "./shared.css";
+
+.file-upload-container {
+    width: 100%;
+}
+
+.file-upload-dropzone {
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    background-color: #f9fafb;
+    cursor: pointer;
+}
+
+.file-upload-dropzone:hover {
+    border-color: #6366f1;
+    background-color: #f0f1ff;
+}
+
+.file-upload-dropzone.dragging {
+    border-color: #6366f1;
+    background-color: #eef2ff;
+    border-style: solid;
+    transform: scale(1.02);
+}
+
+.file-upload-dropzone.uploading {
+    border-color: #10b981;
+    background-color: #ecfdf5;
+    cursor: not-allowed;
+}
+
+.file-input {
+    display: none;
+}
+
+.file-upload-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    cursor: pointer;
+}
+
+.file-upload-dropzone.uploading .file-upload-label {
+    cursor: not-allowed;
+}
+
+.upload-icon {
+    color: #6366f1;
+    transition: transform 0.3s ease;
+}
+
+.file-upload-dropzone:hover .upload-icon {
+    transform: translateY(-4px);
+}
+
+.file-upload-dropzone.dragging .upload-icon {
+    transform: scale(1.1);
+}
+
+.file-upload-dropzone.uploading .upload-icon {
+    color: #10b981;
+}
+
+.upload-primary {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.5rem 0;
+}
+
+.upload-secondary {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+/* Compact for desktop two-column layout */
+@media (min-width: 1200px) {
+    .file-upload-dropzone {
+        padding: 1.5rem 1rem;
+    }
+
+    .upload-icon svg {
+        width: 48px;
+        height: 48px;
+    }
+
+    .upload-primary {
+        font-size: 0.9375rem;
+    }
+
+    .upload-secondary {
+        font-size: 0.75rem;
+    }
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+    .file-upload-dropzone {
+        border-color: #4b5563;
+        background-color: #1f2937;
+    }
+
+    .file-upload-dropzone:hover {
+        border-color: #818cf8;
+        background-color: #312e81;
+    }
+
+    .file-upload-dropzone.dragging {
+        background-color: #3730a3;
+    }
+
+    .file-upload-dropzone.uploading {
+        border-color: #34d399;
+        background-color: #064e3b;
+    }
+
+    .upload-primary {
+        color: #f9fafb;
+    }
+
+    .upload-secondary {
+        color: #d1d5db;
+    }
+
+    .upload-icon {
+        color: #818cf8;
+    }
+
+    .file-upload-dropzone.uploading .upload-icon {
+        color: #34d399;
+    }
+}

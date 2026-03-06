@@ -12,12 +12,20 @@ CRITICAL RULES:
 1. Return ONLY valid JSON - no markdown, no code blocks, no explanation, no extra text
 2. Start your response with { and end with }
 3. Follow the EXACT structure shown below
-4. IGNORE transactions with negative amounts (refunds/payments)
-5. ONLY process transactions where type = "Purchase"
+4. SEPARATE purchases from refunds - they go in different sections
+5. For refunds: track ONLY the net refund amount (not the duplicate entries)
 6. Use ONLY these 6 categories: Gas, Restaurants, Groceries, Entertainment, Utilities, Miscellaneous
 7. DO NOT create new categories like "Food", "Shopping", "Online Shopping", etc.
 8. DO NOT repeat the same transaction multiple times
 9. Process each CSV row ONCE and only ONCE
+
+REFUND HANDLING RULES:
+- Refunds appear as: "Refund initiated" (negative), "Refund settled" (positive), "Refund settled" (negative again)
+- Example: -282.23, +282.23, -282.23 for AMZN MKTP CA
+- Count the NET refund ONCE: take the final negative amount (-282.23)
+- Add to "refunds" section with positive amount (282.23) and merchant name
+- DO NOT include refund transactions in the categories section
+- Ignore "Payment" type transactions (these are bill payments, not refunds)
 
 ANTI-HALLUCINATION RULES:
 - Read the CSV carefully - each transaction appears ONCE in the data
@@ -27,7 +35,7 @@ ANTI-HALLUCINATION RULES:
 - Each transaction in your response must correspond to EXACTLY ONE line in the CSV
 
 CATEGORIZATION RULES:
-Look at the "details" field (merchant name) and assign to ONE of these SIX categories:
+Look at the "details" field (merchant name) and assign PURCHASES to ONE of these SIX categories:
 
 - Gas: PETRO-CANADA, SHELL, ESSO, gas stations
 - Restaurants: UBER EATS, restaurant names, cafes, food delivery
@@ -69,6 +77,13 @@ REQUIRED OUTPUT FORMAT (copy this structure EXACTLY):
       "total": 0.00
     }
   },
+  "refunds": {
+    "transactions": [
+      {"date": "2025-12-27", "merchant": "AMZN MKTP CA", "amount": 282.23},
+      {"date": "2025-12-15", "merchant": "GOOGLE *SERVICES", "amount": 190.00}
+    ],
+    "total": 472.23
+  },
   "grand_total": 117.44
 }
 
@@ -79,10 +94,11 @@ VALIDATION CHECKLIST:
 ✓ NO other categories like "Food", "Shopping", "Online Shopping"
 ✓ Each category has "transactions" array and "total" number
 ✓ Empty categories have empty array [] and total 0.00
+✓ Refunds section has "transactions" array and "total" number
+✓ Refunds show POSITIVE amounts (the refunded amount)
 ✓ All amounts are numbers (not strings)
 ✓ All dates are strings in YYYY-MM-DD format
-✓ grand_total equals sum of all category totals
-✓ No negative amounts included
+✓ grand_total equals sum of all category totals (NOT including refunds)
 ✓ No markdown formatting
 ✓ No duplicate transactions - each CSV row appears ONCE
 ✓ Transaction count matches CSV (not hundreds of duplicates)

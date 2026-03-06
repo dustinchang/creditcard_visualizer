@@ -1,0 +1,207 @@
+@import "./shared.css";
+
+.refunds-container {
+    width: 100%;
+    margin-top: 2rem;
+}
+
+.refunds-card {
+    padding: 1.25rem;
+}
+
+.refunds-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.refunds-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.refunds-icon {
+    color: #10b981;
+    flex-shrink: 0;
+}
+
+.refunds-title-row h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+}
+
+.refunds-badge {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.refunds-total {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.refunds-total-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.refunds-total-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #10b981;
+}
+
+.refunds-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.refund-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.875rem 1rem;
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.refund-item:hover {
+    background-color: #dcfce7;
+    border-color: #86efac;
+}
+
+.refund-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.refund-merchant {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.refund-date {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.refund-amount {
+    font-weight: 700;
+    color: #10b981;
+    font-size: 1rem;
+    white-space: nowrap;
+    margin-left: 1rem;
+}
+
+.refunds-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background-color: #fef3c7;
+    border: 1px solid #fde047;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    color: #92400e;
+}
+
+.refunds-note svg {
+    flex-shrink: 0;
+    color: #f59e0b;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    .refunds-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .refunds-total {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .refund-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .refund-amount {
+        margin-left: 0;
+        align-self: flex-end;
+    }
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+    .refunds-title-row h3 {
+        color: #f9fafb;
+    }
+
+    .refunds-icon {
+        color: #34d399;
+    }
+
+    .refunds-badge {
+        background-color: #064e3b;
+        color: #6ee7b7;
+    }
+
+    .refunds-total-label {
+        color: #d1d5db;
+    }
+
+    .refunds-total-amount {
+        color: #34d399;
+    }
+
+    .refund-item {
+        background-color: #064e3b;
+        border-color: #047857;
+    }
+
+    .refund-item:hover {
+        background-color: #065f46;
+        border-color: #059669;
+    }
+
+    .refund-merchant {
+        color: #f9fafb;
+    }
+
+    .refund-date {
+        color: #d1d5db;
+    }
+
+    .refund-amount {
+        color: #6ee7b7;
+    }
+
+    .refunds-note {
+        background-color: #451a03;
+        border-color: #78350f;
+        color: #fde68a;
+    }
+
+    .refunds-note svg {
+        color: #fbbf24;
+    }
+}
